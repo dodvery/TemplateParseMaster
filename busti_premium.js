@@ -1,38 +1,20 @@
-if (typeof $response !== 'undefined' && $response.body) {
-    try {
-        let body = $response.body;
-        // Если это WebSocket или сложный JSON, пробуем распарсить
-        let obj = JSON.parse(body);
+let body = $response.body;
 
-        // Функция для рекурсивной замены всего, что похоже на статус
-        function forcePremium(target) {
-            if (typeof target !== 'object' || target === null) return;
-            
-            for (let key in target) {
-                // Принудительно ставим премиум, если ключ намекает на это
-                let k = key.toLowerCase();
-                if (k.includes('premium') || k.includes('sub') || k === 'is_active' || k === 'status') {
-                    if (typeof target[key] === 'boolean') target[key] = true;
-                    if (typeof target[key] === 'string') target[key] = "active";
-                    if (typeof target[key] === 'number') target[key] = 1;
-                }
-                // Идем глубже
-                forcePremium(target[key]);
-            }
-        }
+if (body) {
+    // Мягкая регулярная замена. Меняем только значения, не ломая схему данных Dart.
+    body = body.replace(/"is_premium"\s*:\s*false/gi, '"is_premium":true')
+               .replace(/"premium"\s*:\s*false/gi, '"premium":true')
+               .replace(/"has_subscription"\s*:\s*false/gi, '"has_subscription":true')
+               .replace(/"is_active"\s*:\s*false/gi, '"is_active":true')
+               .replace(/"status"\s*:\s*"inactive"/gi, '"status":"active"')
+               .replace(/"status"\s*:\s*"none"/gi, '"status":"active"')
+               .replace(/"status"\s*:\s*0/gi, '"status":1');
 
-        // Применяем ко всему объекту
-        forcePremium(obj);
-
-        // Дополнительная инъекция в корень, если API вернет простую структуру
-        obj.is_premium = true;
-        obj.premium = true;
-        obj.subscription_status = "active";
-
-        $done({ body: JSON.stringify(obj) });
-    } catch (e) {
-        $done({});
-    }
+    // Если метод subscription_status_get возвращает просто {"result": false} или {"result": 0}
+    body = body.replace(/"result"\s*:\s*false/gi, '"result":true')
+               .replace(/"result"\s*:\s*0/gi, '"result":1');
+               
+    $done({ body: body });
 } else {
     $done({});
 }
