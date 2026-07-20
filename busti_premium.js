@@ -2,36 +2,21 @@ let req = $request.body || "";
 let res = $response.body || "";
 
 if (res) {
-    try {
-        let obj = JSON.parse(res);
-        
-        if (obj && obj.result !== undefined) {
-            // 1. Если результат - объект (например, профиль из user_get)
-            if (typeof obj.result === 'object' && obj.result !== null && !Array.isArray(obj.result)) {
-                
-                // Мягко инжектим булевы флаги премиума (Dart обычно игнорирует неизвестные ключи, но не падает)
-                obj.result.is_premium = true;
-                obj.result.premium = true;
-                obj.result.has_subscription = true;
-                
-                // Строковые статусы меняем ТОЛЬКО если они уже существуют в ответе
-                if ('status' in obj.result) obj.result.status = "active";
-                if ('subscription_status' in obj.result) obj.result.subscription_status = "active";
-                if ('is_active' in obj.result) obj.result.is_active = true;
-                
-            } 
-            // 2. Если сервер возвращает просто { "result": false }, и это точно запрос подписки
-            else if (typeof obj.result === 'boolean' && req.includes("subscription_status_get")) {
-                obj.result = true;
-            }
-        }
-        
-        // Возвращаем модифицированный ответ
-        $done({ body: JSON.stringify(obj) });
-    } catch (e) {
-        // Если пришел не JSON (или WebSocket), отдаем оригинал без изменений
-        $done({ body: res });
+    // 1. Шпионим и пишем оригинальный JSON в лог-файл
+    if (req.includes("user_get") || req.includes("subscription")) {
+        console.log("=== CAPYBARA INTERCEPT START ===");
+        console.log(res);
+        console.log("=== CAPYBARA INTERCEPT END ===");
+        try {
+            $notification.post("Capybara MITM", "JSON сервера пойман!", "Ищи метку CAPYBARA INTERCEPT в логах");
+        } catch(e) {}
     }
+
+    // 2. Ковровая бомбардировка всеми мыслимыми флагами
+    let modified = res.replace(/"(is_premium|premium|has_subscription|is_active|pro|is_pro|is_sub|subscription_active|active|is_paid)"\s*:\s*(false|0|null)/gi, '"$1":true')
+                      .replace(/"(status|subscription_status|sub_status|premium_status|state)"\s*:\s*"(inactive|none|free|basic|null|0)"/gi, '"$1":"active"');
+
+    $done({ body: modified });
 } else {
     $done({});
 }
